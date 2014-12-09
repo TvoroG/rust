@@ -828,7 +828,7 @@ pub fn build_session_options(matches: &getopts::Matches) -> Options {
         NoDebugInfo
     };
 
-    let addl_lib_search_paths = matches.opt_strs("L").iter().map(|s| {
+    let addl_lib_search_paths: Vec<Path> = matches.opt_strs("L").iter().map(|s| {
         Path::new(s.as_slice())
     }).collect();
 

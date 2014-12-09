@@ -244,6 +244,7 @@ pub fn phase_2_configure_and_expand(sess: &Session,
     // Abort if there are errors from lint processing or a plugin registrar.
     sess.abort_if_errors();
 
+    println!("before expansion");
     krate = time(time_passes, "expansion", (krate, macros, syntax_exts),
         |(krate, macros, syntax_exts)| {
             // Windows dlls do not have rpaths, so they don't know how to find their
@@ -375,6 +376,7 @@ pub fn phase_3_run_analysis_passes<'tcx>(sess: Session,
     let stability_index = time(time_passes, "stability index", (), |_|
                                stability::Index::build(krate));
 
+    println!("wowowowowo");
     time(time_passes, "static item recursion checking", (), |_|
          middle::check_static_recursion::check_crate(&sess, krate, &def_map, &ast_map));
 

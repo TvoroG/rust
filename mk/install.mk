@@ -45,6 +45,14 @@ prepare_uninstall: dist-install-dir-$(CFG_BUILD) | tmp/empty_dir
 tmp/empty_dir:
 	mkdir -p $@
 
+
+install_stage1:
+	rm -Rf $(CFG_LIBDIR)/rustlib
+	rm $(CFG_LIBDIR)/*.so
+	cp $(CFG_SRC_DIR)$(CFG_BUILD)/stage1/lib/*.so $(CFG_LIBDIR)
+	cp -R $(CFG_SRC_DIR)$(CFG_BUILD)/stage1/lib/rustlib $(CFG_LIBDIR)
+	cp $(CFG_SRC_DIR)$(CFG_BUILD)/stage1/bin/rustc $(CFG_PREFIX)/bin
+	cp $(CFG_SRC_DIR)$(CFG_BUILD)/stage1/bin/rust-lldb $(CFG_PREFIX)/bin
 ######################################################################
 # Android remote installation
 ######################################################################
