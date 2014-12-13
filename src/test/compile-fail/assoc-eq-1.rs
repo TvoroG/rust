@@ -8,19 +8,20 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that explicit region bounds are allowed on the various
-// nominal types (but not on other types) and that they are type
-// checked.
+// Test equality constraints on associated types. Check that unsupported syntax
+// does not ICE.
 
-struct Foo;
+#![feature(associated_types)]
 
-impl Foo {
-    fn some_method<A:'static>(self) { }
+pub trait Foo {
+    type A;
+    fn boo(&self) -> <Self as Foo>::A;
 }
 
-fn caller<'a>(x: &int) {
-    Foo.some_method::<&'a int>();
-    //~^ ERROR declared lifetime bound not satisfied
+fn foo2<I: Foo>(x: I) {
+    let _: A = x.boo(); //~ERROR use of undeclared
+    let _: I::A = x.boo(); //~ERROR failed to resolve
+    //~^ERROR use of undeclared type name `I::A`
 }
 
-fn main() { }
+pub fn main() {}

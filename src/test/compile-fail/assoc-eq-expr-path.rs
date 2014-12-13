@@ -8,19 +8,21 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-// Check that explicit region bounds are allowed on the various
-// nominal types (but not on other types) and that they are type
-// checked.
+// Check that an associated type cannot be bound in an expression path.
 
-struct Foo;
+#![feature(associated_types)]
 
-impl Foo {
-    fn some_method<A:'static>(self) { }
+trait Foo {
+    type A;
+    fn bar() -> int;
 }
 
-fn caller<'a>(x: &int) {
-    Foo.some_method::<&'a int>();
-    //~^ ERROR declared lifetime bound not satisfied
+impl Foo for int {
+    type A = uint;
+    fn bar() -> int { 42 }
 }
 
-fn main() { }
+pub fn main() {
+    let x: int = Foo::<A=uint>::bar();
+    //~^ERROR unexpected binding of associated item in expression path
+}
