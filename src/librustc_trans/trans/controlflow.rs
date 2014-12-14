@@ -46,7 +46,6 @@ pub fn trans_stmt<'blk, 'tcx>(cx: Block<'blk, 'tcx>,
     let _icx = push_ctxt("trans_stmt");
     let fcx = cx.fcx;
     debug!("trans_stmt({})", s.repr(cx.tcx()));
-
     if cx.sess().asm_comments() {
         add_span_comment(cx, s.span, s.repr(cx.tcx()).as_slice());
     }

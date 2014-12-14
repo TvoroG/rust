@@ -466,6 +466,9 @@ pub type BuilderRef = *mut Builder_opaque;
 pub enum ExecutionEngine_opaque {}
 pub type ExecutionEngineRef = *mut ExecutionEngine_opaque;
 #[allow(missing_copy_implementations)]
+pub enum RustJITMemoryManager_opaque {}
+pub type RustJITMemoryManagerRef = *mut RustJITMemoryManager_opaque;
+#[allow(missing_copy_implementations)]
 pub enum MemoryBuffer_opaque {}
 pub type MemoryBufferRef = *mut MemoryBuffer_opaque;
 #[allow(missing_copy_implementations)]
@@ -654,10 +657,38 @@ extern {
     pub fn LLVMGetElementType(Ty: TypeRef) -> TypeRef;
     pub fn LLVMGetArrayLength(ArrayTy: TypeRef) -> c_uint;
     pub fn LLVMGetPointerAddressSpace(PointerTy: TypeRef) -> c_uint;
-    pub fn LLVMGetPointerToGlobal(EE: ExecutionEngineRef, V: ValueRef)
-                                  -> *const ();
     pub fn LLVMGetVectorSize(VectorTy: TypeRef) -> c_uint;
 
+
+    
+    /* Operations on execution engines */
+    pub fn LLVMCreateExecutionEngineForModule(OutEE: *mut ExecutionEngineRef, 
+                                              M: ModuleRef,
+                                              OutError: *mut *mut c_char) -> Bool;
+
+    pub fn LLVMGetPointerToGlobal(EE: ExecutionEngineRef, V: ValueRef)
+                                  -> *const ();
+
+    pub fn LLVMRustCreateJITMemoryManager(morestack: *const ())
+                                          -> RustJITMemoryManagerRef;
+    pub fn LLVMBuildExecutionEngine(Mod: ModuleRef,
+                                    MM: RustJITMemoryManagerRef) -> ExecutionEngineRef;
+
+    pub fn LLVMBuildSimpleExecutionEngine(Mod: ModuleRef) -> ExecutionEngineRef;
+
+    pub fn LLVMExecutionEngineFinalizeObject(EE: ExecutionEngineRef);
+    pub fn LLVMRustLoadDynamicLibrary(path: *const c_char) -> Bool;
+    pub fn LLVMExecutionEngineAddModule(EE: ExecutionEngineRef, M: ModuleRef);
+    pub fn LLVMExecutionEngineRemoveModule(EE: ExecutionEngineRef, M: ModuleRef)
+                                           -> Bool;
+
+    pub fn LLVMExecutionEngineRunFunction(EE: ExecutionEngineRef, F: ValueRef);
+    pub fn LLVMGetModuleFirstFunction(M: ModuleRef) -> ValueRef;
+    pub fn LLVMExecutionEngineGetPointerToFunction(EE: ExecutionEngineRef, F: ValueRef) -> *const ();
+    pub fn LLVMExecutionEngineAddArchive(EE: ExecutionEngineRef, AR: ArchiveRef);
+    pub fn LLVMRustCreateBitcodeModule(C: ContextRef, bc: *const c_char, len: size_t) -> ModuleRef;
+
+    
     /* Operations on other types */
     pub fn LLVMVoidTypeInContext(C: ContextRef) -> TypeRef;
     pub fn LLVMLabelTypeInContext(C: ContextRef) -> TypeRef;

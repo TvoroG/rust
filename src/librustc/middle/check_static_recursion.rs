@@ -41,7 +41,6 @@ pub fn check_crate<'ast>(sess: &Session,
         def_map: def_map,
         ast_map: ast_map
     };
-    println!("check crate");
     visit::walk_crate(&mut visitor, krate);
     sess.abort_if_errors();
 }

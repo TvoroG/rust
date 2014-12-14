@@ -146,6 +146,7 @@ pub struct Handler {
 
 impl Handler {
     pub fn fatal(&self, msg: &str) -> ! {
+        println!("panic!!!");
         self.emit.borrow_mut().emit(None, msg, None, Fatal);
         panic!(FatalError);
     }
