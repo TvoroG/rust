@@ -18,6 +18,7 @@
 #include "llvm/ADT/iterator_range.h"
 #include "llvm/IR/Module.h"
 
+
 using namespace llvm;
 using namespace llvm::sys;
 using namespace llvm::object;
@@ -147,6 +148,7 @@ extern "C" void LLVMExecutionEngineFinalizeObject(LLVMExecutionEngineRef eeref)
 
     ee->finalizeObject();
 }
+
 
 extern "C" void *LLVMExecutionEngineGetPointerToFunction(LLVMExecutionEngineRef EE, LLVMValueRef F)
 {

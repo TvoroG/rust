@@ -20,7 +20,6 @@ pub use self::Decl_::*;
 pub use self::ExplicitSelf_::*;
 pub use self::Expr_::*;
 pub use self::FloatTy::*;
-pub use self::FnStyle::*;
 pub use self::FunctionRetTy::*;
 pub use self::ForeignItem_::*;
 pub use self::ImplItem::*;
@@ -32,6 +31,7 @@ pub use self::Lit_::*;
 pub use self::LitIntType::*;
 pub use self::LocalSource::*;
 pub use self::Mac_::*;
+pub use self::MacStmtStyle::*;
 pub use self::MatchSource::*;
 pub use self::MetaItem_::*;
 pub use self::Method_::*;
@@ -616,8 +616,20 @@ pub enum Stmt_ {
     /// Expr with trailing semi-colon (may have any type):
     StmtSemi(P<Expr>, NodeId),
 
-    /// bool: is there a trailing semi-colon?
-    StmtMac(Mac, bool),
+    StmtMac(Mac, MacStmtStyle),
+}
+
+#[deriving(Clone, Copy, PartialEq, Eq, Encodable, Decodable, Hash, Show)]
+pub enum MacStmtStyle {
+    /// The macro statement had a trailing semicolon, e.g. `foo! { ... };`
+    /// `foo!(...);`, `foo![...];`
+    MacStmtWithSemicolon,
+    /// The macro statement had braces; e.g. foo! { ... }
+    MacStmtWithBraces,
+    /// The macro statement had parentheses or brackets and no semicolon; e.g.
+    /// `foo!(...)`. All of these will end up being converted into macro
+    /// expressions.
+    MacStmtWithoutBraces,
 }
 
 /// Where a local declaration came from: either a true `let ... =
@@ -697,7 +709,7 @@ pub struct Expr {
 #[deriving(Clone, PartialEq, Eq, Encodable, Decodable, Hash, Show)]
 pub enum Expr_ {
     /// First expr is the place; second expr is the value.
-    ExprBox(P<Expr>, P<Expr>),
+    ExprBox(Option<P<Expr>>, P<Expr>),
     ExprVec(Vec<P<Expr>>),
     ExprCall(P<Expr>, Vec<P<Expr>>),
     ExprMethodCall(SpannedIdent, Vec<P<Ty>>, Vec<P<Expr>>),
@@ -719,7 +731,6 @@ pub enum Expr_ {
     ExprLoop(P<Block>, Option<Ident>),
     ExprMatch(P<Expr>, Vec<Arm>, MatchSource),
     ExprClosure(CaptureClause, Option<UnboxedClosureKind>, P<FnDecl>, P<Block>),
-    ExprProc(P<FnDecl>, P<Block>),
     ExprBlock(P<Block>),
 
     ExprAssign(P<Expr>, P<Expr>),
@@ -1028,7 +1039,7 @@ pub struct TypeField {
 pub struct TypeMethod {
     pub ident: Ident,
     pub attrs: Vec<Attribute>,
-    pub fn_style: FnStyle,
+    pub unsafety: Unsafety,
     pub abi: Abi,
     pub decl: P<FnDecl>,
     pub generics: Generics,
@@ -1199,7 +1210,7 @@ impl fmt::Show for Onceness {
 #[deriving(Clone, PartialEq, Eq, Encodable, Decodable, Hash, Show)]
 pub struct ClosureTy {
     pub lifetimes: Vec<LifetimeDef>,
-    pub fn_style: FnStyle,
+    pub unsafety: Unsafety,
     pub onceness: Onceness,
     pub decl: P<FnDecl>,
     pub bounds: TyParamBounds,
@@ -1207,7 +1218,7 @@ pub struct ClosureTy {
 
 #[deriving(Clone, PartialEq, Eq, Encodable, Decodable, Hash, Show)]
 pub struct BareFnTy {
-    pub fn_style: FnStyle,
+    pub unsafety: Unsafety,
     pub abi: Abi,
     pub lifetimes: Vec<LifetimeDef>,
     pub decl: P<FnDecl>
@@ -1225,8 +1236,6 @@ pub enum Ty_ {
     TyRptr(Option<Lifetime>, MutTy),
     /// A closure (e.g. `|uint| -> bool`)
     TyClosure(P<ClosureTy>),
-    /// A procedure (e.g `proc(uint) -> bool`)
-    TyProc(P<ClosureTy>),
     /// A bare function (e.g. `fn(uint) -> bool`)
     TyBareFn(P<BareFnTy>),
     /// A tuple (`(A, B, C, D,...)`)
@@ -1307,21 +1316,17 @@ pub struct FnDecl {
     pub variadic: bool
 }
 
-#[deriving(Clone, PartialEq, Eq, Encodable, Decodable, Hash)]
-pub enum FnStyle {
-    /// Declared with "unsafe fn"
-    UnsafeFn,
-    /// Declared with "fn"
-    NormalFn,
+#[deriving(Copy, Clone, PartialEq, Eq, Encodable, Decodable, Hash)]
+pub enum Unsafety {
+    Unsafe,
+    Normal,
 }
 
-impl Copy for FnStyle {}
-
-impl fmt::Show for FnStyle {
+impl fmt::Show for Unsafety {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            NormalFn => "normal".fmt(f),
-            UnsafeFn => "unsafe".fmt(f),
+            Unsafety::Normal => "normal".fmt(f),
+            Unsafety::Unsafe => "unsafe".fmt(f),
         }
     }
 }
@@ -1374,7 +1379,7 @@ pub enum Method_ {
              Generics,
              Abi,
              ExplicitSelf,
-             FnStyle,
+             Unsafety,
              P<FnDecl>,
              P<Block>,
              Visibility),
@@ -1612,19 +1617,21 @@ pub struct Item {
 pub enum Item_ {
     ItemStatic(P<Ty>, Mutability, P<Expr>),
     ItemConst(P<Ty>, P<Expr>),
-    ItemFn(P<FnDecl>, FnStyle, Abi, Generics, P<Block>),
+    ItemFn(P<FnDecl>, Unsafety, Abi, Generics, P<Block>),
     ItemMod(Mod),
     ItemForeignMod(ForeignMod),
     ItemTy(P<Ty>, Generics),
     ItemEnum(EnumDef, Generics),
     ItemStruct(P<StructDef>, Generics),
     /// Represents a Trait Declaration
-    ItemTrait(Generics,
+    ItemTrait(Unsafety,
+              Generics,
               Option<TraitRef>, // (optional) default bound not required for Self.
                                 // Currently, only Sized makes sense here.
               TyParamBounds,
               Vec<TraitItem>),
-    ItemImpl(Generics,
+    ItemImpl(Unsafety,
+             Generics,
              Option<TraitRef>, // (optional) trait this impl implements
              P<Ty>, // self
              Vec<ImplItem>),

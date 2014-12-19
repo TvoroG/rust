@@ -26,7 +26,7 @@ use os;
 use path::{Path,GenericPath};
 use result::*;
 use result::Result::{Err, Ok};
-use slice::{AsSlice,SlicePrelude};
+use slice::{AsSlice,SliceExt};
 use str;
 use string::String;
 use vec::Vec;
@@ -216,6 +216,7 @@ pub mod dl {
     use c_str::{CString, ToCStr};
     use libc;
     use kinds::Copy;
+    use ops::FnOnce;
     use ptr;
     use result::*;
     use result::Result::{Err, Ok};
@@ -231,7 +232,9 @@ pub mod dl {
         dlopen(ptr::null(), Lazy as libc::c_int) as *mut u8
     }
 
-    pub fn check_for_errors_in<T>(f: || -> T) -> Result<T, String> {
+    pub fn check_for_errors_in<T, F>(f: F) -> Result<T, String> where
+        F: FnOnce() -> T,
+    {
         use sync::{StaticMutex, MUTEX_INIT};
         static LOCK: StaticMutex = MUTEX_INIT;
         unsafe {
@@ -287,11 +290,12 @@ pub mod dl {
     use c_str::ToCStr;
     use iter::IteratorExt;
     use libc;
+    use ops::FnOnce;
     use os;
     use ptr;
     use result::Result;
     use result::Result::{Ok, Err};
-    use slice::SlicePrelude;
+    use slice::SliceExt;
     use str::StrPrelude;
     use str;
     use string::String;
@@ -312,7 +316,9 @@ pub mod dl {
         handle as *mut u8
     }
 
-    pub fn check_for_errors_in<T>(f: || -> T) -> Result<T, String> {
+    pub fn check_for_errors_in<T, F>(f: F) -> Result<T, String> where
+        F: FnOnce() -> T,
+    {
         unsafe {
             SetLastError(0);
 

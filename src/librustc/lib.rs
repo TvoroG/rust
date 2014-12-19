@@ -25,6 +25,7 @@
 #![feature(default_type_params, globs, import_shadowing, macro_rules, phase, quote)]
 #![feature(slicing_syntax, unsafe_destructor)]
 #![feature(rustc_diagnostic_macros)]
+#![feature(unboxed_closures)]
 
 extern crate arena;
 extern crate flate;
@@ -35,6 +36,7 @@ extern crate rustc_llvm;
 extern crate rustc_back;
 extern crate serialize;
 extern crate rbml;
+extern crate collections;
 #[phase(plugin, link)] extern crate log;
 #[phase(plugin, link)] extern crate syntax;
 
@@ -61,7 +63,6 @@ pub mod back {
 pub mod middle {
     pub mod astconv_util;
     pub mod astencode;
-    pub mod borrowck;
     pub mod cfg;
     pub mod check_const;
     pub mod check_static_recursion;
@@ -121,7 +122,7 @@ pub mod lib {
     pub use llvm;
 }
 
-__build_diagnostic_array!(DIAGNOSTICS)
+__build_diagnostic_array! { DIAGNOSTICS }
 
 // A private module so that macro-expanded idents like
 // `::rustc::lint::Lint` will also work in `rustc` itself.

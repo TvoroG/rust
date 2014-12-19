@@ -29,7 +29,7 @@ use std::cell::{RefCell, Cell};
 use std::collections::BitvSet;
 use std::collections::HashSet;
 
-thread_local!(static USED_ATTRS: RefCell<BitvSet> = RefCell::new(BitvSet::new()))
+thread_local! { static USED_ATTRS: RefCell<BitvSet> = RefCell::new(BitvSet::new()) }
 
 pub fn mark_used(attr: &Attribute) {
     let AttrId(id) = attr.node.id;
@@ -115,7 +115,8 @@ impl AttrMetaMethods for P<MetaItem> {
 
 pub trait AttributeMethods {
     fn meta<'a>(&'a self) -> &'a MetaItem;
-    fn with_desugared_doc<T>(&self, f: |&Attribute| -> T) -> T;
+    fn with_desugared_doc<T, F>(&self, f: F) -> T where
+        F: FnOnce(&Attribute) -> T;
 }
 
 impl AttributeMethods for Attribute {
@@ -127,7 +128,9 @@ impl AttributeMethods for Attribute {
     /// Convert self to a normal #[doc="foo"] comment, if it is a
     /// comment like `///` or `/** */`. (Returns self unchanged for
     /// non-sugared doc attributes.)
-    fn with_desugared_doc<T>(&self, f: |&Attribute| -> T) -> T {
+    fn with_desugared_doc<T, F>(&self, f: F) -> T where
+        F: FnOnce(&Attribute) -> T,
+    {
         if self.node.is_sugared_doc {
             let comment = self.value_str().unwrap();
             let meta = mk_name_value_item_str(
@@ -166,7 +169,7 @@ pub fn mk_word_item(name: InternedString) -> P<MetaItem> {
     P(dummy_spanned(MetaWord(name)))
 }
 
-thread_local!(static NEXT_ATTR_ID: Cell<uint> = Cell::new(0))
+thread_local! { static NEXT_ATTR_ID: Cell<uint> = Cell::new(0) }
 
 pub fn mk_attr_id() -> AttrId {
     let id = NEXT_ATTR_ID.with(|slot| {

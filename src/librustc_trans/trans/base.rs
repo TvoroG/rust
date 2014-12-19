@@ -103,13 +103,17 @@ use syntax::visit::Visitor;
 use syntax::visit;
 use syntax::{ast, ast_util, ast_map};
 
-thread_local!(static TASK_LOCAL_INSN_KEY: RefCell<Option<Vec<&'static str>>> = {
-    RefCell::new(None)
-})
+thread_local! {
+    static TASK_LOCAL_INSN_KEY: RefCell<Option<Vec<&'static str>>> = {
+        RefCell::new(None)
+    }
+}
 
-pub fn with_insn_ctxt(blk: |&[&'static str]|) {
-    TASK_LOCAL_INSN_KEY.with(|slot| {
-        slot.borrow().as_ref().map(|s| blk(s.as_slice()));
+pub fn with_insn_ctxt<F>(blk: F) where
+    F: FnOnce(&[&'static str]),
+{
+    TASK_LOCAL_INSN_KEY.with(move |slot| {
+        slot.borrow().as_ref().map(move |s| blk(s.as_slice()));
     })
 }
 
@@ -278,10 +282,10 @@ pub fn decl_rust_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                               fn_ty: Ty<'tcx>, name: &str) -> ValueRef {
     let (inputs, output, abi, env) = match fn_ty.sty {
         ty::ty_bare_fn(ref f) => {
-            (f.sig.inputs.clone(), f.sig.output, f.abi, None)
+            (f.sig.0.inputs.clone(), f.sig.0.output, f.abi, None)
         }
         ty::ty_closure(ref f) => {
-            (f.sig.inputs.clone(), f.sig.output, f.abi, Some(Type::i8p(ccx)))
+            (f.sig.0.inputs.clone(), f.sig.0.output, f.abi, Some(Type::i8p(ccx)))
         }
         ty::ty_unboxed_closure(closure_did, _, ref substs) => {
             let unboxed_closures = ccx.tcx().unboxed_closures.borrow();
@@ -289,8 +293,8 @@ pub fn decl_rust_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
             let function_type = unboxed_closure.closure_type.clone();
             let self_type = self_type_for_unboxed_closure(ccx, closure_did, fn_ty);
             let llenvironment_type = type_of_explicit_arg(ccx, self_type);
-            (function_type.sig.inputs.iter().map(|t| t.subst(ccx.tcx(), substs)).collect(),
-             function_type.sig.output.subst(ccx.tcx(), substs),
+            (function_type.sig.0.inputs.iter().map(|t| t.subst(ccx.tcx(), substs)).collect(),
+             function_type.sig.0.output.subst(ccx.tcx(), substs),
              RustCall,
              Some(llenvironment_type))
         }
@@ -841,12 +845,15 @@ pub fn cast_shift_const_rhs(op: ast::BinOp,
                    |a, b| unsafe { llvm::LLVMConstZExt(a, b.to_ref()) })
 }
 
-pub fn cast_shift_rhs(op: ast::BinOp,
-                      lhs: ValueRef,
-                      rhs: ValueRef,
-                      trunc: |ValueRef, Type| -> ValueRef,
-                      zext: |ValueRef, Type| -> ValueRef)
-                      -> ValueRef {
+pub fn cast_shift_rhs<F, G>(op: ast::BinOp,
+                            lhs: ValueRef,
+                            rhs: ValueRef,
+                            trunc: F,
+                            zext: G)
+                            -> ValueRef where
+    F: FnOnce(ValueRef, Type) -> ValueRef,
+    G: FnOnce(ValueRef, Type) -> ValueRef,
+{
     // Shifts may have any size int on the rhs
     unsafe {
         if ast_util::is_shift_binop(op) {
@@ -1101,10 +1108,12 @@ pub fn raw_block<'blk, 'tcx>(fcx: &'blk FunctionContext<'blk, 'tcx>,
     common::BlockS::new(llbb, is_lpad, None, fcx)
 }
 
-pub fn with_cond<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
-                             val: ValueRef,
-                             f: |Block<'blk, 'tcx>| -> Block<'blk, 'tcx>)
-                             -> Block<'blk, 'tcx> {
+pub fn with_cond<'blk, 'tcx, F>(bcx: Block<'blk, 'tcx>,
+                                val: ValueRef,
+                                f: F)
+                                -> Block<'blk, 'tcx> where
+    F: FnOnce(Block<'blk, 'tcx>) -> Block<'blk, 'tcx>,
+{
     let _icx = push_ctxt("with_cond");
     let fcx = bcx.fcx;
     let next_cx = fcx.new_temp_block("next");
@@ -1389,8 +1398,7 @@ fn has_nested_returns(tcx: &ty::ctxt, id: ast::NodeId) -> bool {
         }
         Some(ast_map::NodeExpr(e)) => {
             match e.node {
-                ast::ExprClosure(_, _, _, ref blk) |
-                ast::ExprProc(_, ref blk) => {
+                ast::ExprClosure(_, _, _, ref blk) => {
                     let mut explicit = CheckForNestedReturnsVisitor::explicit();
                     let mut implicit = CheckForNestedReturnsVisitor::implicit();
                     visit::walk_expr(&mut explicit, e);
@@ -1990,7 +1998,7 @@ pub fn trans_named_tuple_constructor<'blk, 'tcx>(mut bcx: Block<'blk, 'tcx>,
     let tcx = ccx.tcx();
 
     let result_ty = match ctor_ty.sty {
-        ty::ty_bare_fn(ref bft) => bft.sig.output.unwrap(),
+        ty::ty_bare_fn(ref bft) => bft.sig.0.output.unwrap(),
         _ => ccx.sess().bug(
             format!("trans_enum_variant_constructor: \
                      unexpected ctor return type {}",
@@ -2062,7 +2070,7 @@ fn trans_enum_variant_or_tuple_like_struct<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx
     let ctor_ty = ctor_ty.subst(ccx.tcx(), param_substs);
 
     let result_ty = match ctor_ty.sty {
-        ty::ty_bare_fn(ref bft) => bft.sig.output,
+        ty::ty_bare_fn(ref bft) => bft.sig.0.output,
         _ => ccx.sess().bug(
             format!("trans_enum_variant_or_tuple_like_struct: \
                      unexpected ctor return type {}",
@@ -2298,7 +2306,7 @@ pub fn trans_item(ccx: &CrateContext, item: &ast::Item) {
         let mut v = TransItemVisitor{ ccx: ccx };
         v.visit_block(&**body);
       }
-      ast::ItemImpl(ref generics, _, _, ref impl_items) => {
+      ast::ItemImpl(_, ref generics, _, _, ref impl_items) => {
         meth::trans_impl(ccx,
                          item.ident,
                          impl_items.as_slice(),
@@ -2431,7 +2439,7 @@ pub fn get_fn_llvm_attributes<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, fn_ty: Ty<
     // at either 1 or 2 depending on whether there's an env slot or not
     let mut first_arg_offset = if has_env { 2 } else { 1 };
     let mut attrs = llvm::AttrBuilder::new();
-    let ret_ty = fn_sig.output;
+    let ret_ty = fn_sig.0.output;
 
     // These have an odd calling convention, so we need to manually
     // unpack the input ty's
@@ -2439,15 +2447,15 @@ pub fn get_fn_llvm_attributes<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, fn_ty: Ty<
         ty::ty_unboxed_closure(_, _, _) => {
             assert!(abi == RustCall);
 
-            match fn_sig.inputs[0].sty {
+            match fn_sig.0.inputs[0].sty {
                 ty::ty_tup(ref inputs) => inputs.clone(),
                 _ => ccx.sess().bug("expected tuple'd inputs")
             }
         },
         ty::ty_bare_fn(_) if abi == RustCall => {
-            let mut inputs = vec![fn_sig.inputs[0]];
+            let mut inputs = vec![fn_sig.0.inputs[0]];
 
-            match fn_sig.inputs[1].sty {
+            match fn_sig.0.inputs[1].sty {
                 ty::ty_tup(ref t_in) => {
                     inputs.push_all(t_in.as_slice());
                     inputs
@@ -2455,7 +2463,7 @@ pub fn get_fn_llvm_attributes<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, fn_ty: Ty<
                 _ => ccx.sess().bug("expected tuple'd inputs")
             }
         }
-        _ => fn_sig.inputs.clone()
+        _ => fn_sig.0.inputs.clone()
     };
 
     if let ty::FnConverging(ret_ty) = ret_ty {

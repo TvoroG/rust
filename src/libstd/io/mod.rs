@@ -105,6 +105,7 @@
 //!     # #![allow(dead_code)]
 //!     use std::io::{TcpListener, TcpStream};
 //!     use std::io::{Acceptor, Listener};
+//!     use std::thread::Thread;
 //!
 //!     let listener = TcpListener::bind("127.0.0.1:80");
 //!
@@ -119,10 +120,10 @@
 //!     for stream in acceptor.incoming() {
 //!         match stream {
 //!             Err(e) => { /* connection failed */ }
-//!             Ok(stream) => spawn(proc() {
+//!             Ok(stream) => Thread::spawn(move|| {
 //!                 // connection succeeded
 //!                 handle_client(stream)
-//!             })
+//!             }).detach()
 //!         }
 //!     }
 //!
@@ -233,7 +234,7 @@ use int;
 use iter::{Iterator, IteratorExt};
 use kinds::Copy;
 use mem::transmute;
-use ops::{BitOr, BitXor, BitAnd, Sub, Not};
+use ops::{BitOr, BitXor, BitAnd, Sub, Not, FnOnce};
 use option::Option;
 use option::Option::{Some, None};
 use os;
@@ -241,7 +242,7 @@ use boxed::Box;
 use result::Result;
 use result::Result::{Ok, Err};
 use sys;
-use slice::SlicePrelude;
+use slice::SliceExt;
 use str::StrPrelude;
 use str;
 use string::String;
@@ -426,18 +427,22 @@ impl Copy for IoErrorKind {}
 /// A trait that lets you add a `detail` to an IoError easily
 trait UpdateIoError<T> {
     /// Returns an IoError with updated description and detail
-    fn update_err(self, desc: &'static str, detail: |&IoError| -> String) -> Self;
+    fn update_err<D>(self, desc: &'static str, detail: D) -> Self where
+        D: FnOnce(&IoError) -> String;
 
     /// Returns an IoError with updated detail
-    fn update_detail(self, detail: |&IoError| -> String) -> Self;
+    fn update_detail<D>(self, detail: D) -> Self where
+        D: FnOnce(&IoError) -> String;
 
     /// Returns an IoError with update description
     fn update_desc(self, desc: &'static str) -> Self;
 }
 
 impl<T> UpdateIoError<T> for IoResult<T> {
-    fn update_err(self, desc: &'static str, detail: |&IoError| -> String) -> IoResult<T> {
-        self.map_err(|mut e| {
+    fn update_err<D>(self, desc: &'static str, detail: D) -> IoResult<T> where
+        D: FnOnce(&IoError) -> String,
+    {
+        self.map_err(move |mut e| {
             let detail = detail(&e);
             e.desc = desc;
             e.detail = Some(detail);
@@ -445,8 +450,10 @@ impl<T> UpdateIoError<T> for IoResult<T> {
         })
     }
 
-    fn update_detail(self, detail: |&IoError| -> String) -> IoResult<T> {
-        self.map_err(|mut e| { e.detail = Some(detail(&e)); e })
+    fn update_detail<D>(self, detail: D) -> IoResult<T> where
+        D: FnOnce(&IoError) -> String,
+    {
+        self.map_err(move |mut e| { e.detail = Some(detail(&e)); e })
     }
 
     fn update_desc(self, desc: &'static str) -> IoResult<T> {
@@ -975,7 +982,7 @@ impl<'a, R: Reader> Reader for RefReader<'a, R> {
 }
 
 impl<'a, R: Buffer> Buffer for RefReader<'a, R> {
-    fn fill_buf<'a>(&'a mut self) -> IoResult<&'a [u8]> { self.inner.fill_buf() }
+    fn fill_buf(&mut self) -> IoResult<&[u8]> { self.inner.fill_buf() }
     fn consume(&mut self, amt: uint) { self.inner.consume(amt) }
 }
 
@@ -1904,9 +1911,10 @@ bitflags! {
     }
 }
 
-impl Copy for FilePermission {}
 
+#[stable]
 impl Default for FilePermission {
+    #[stable]
     #[inline]
     fn default() -> FilePermission { FilePermission::empty() }
 }

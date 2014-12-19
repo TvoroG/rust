@@ -52,14 +52,32 @@ impl Pos for BytePos {
     fn to_uint(&self) -> uint { let BytePos(n) = *self; n as uint }
 }
 
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl Add<BytePos, BytePos> for BytePos {
     fn add(&self, rhs: &BytePos) -> BytePos {
         BytePos((self.to_uint() + rhs.to_uint()) as u32)
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl Add<BytePos, BytePos> for BytePos {
+    fn add(self, rhs: BytePos) -> BytePos {
+        BytePos((self.to_uint() + rhs.to_uint()) as u32)
+    }
+}
+
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl Sub<BytePos, BytePos> for BytePos {
     fn sub(&self, rhs: &BytePos) -> BytePos {
+        BytePos((self.to_uint() - rhs.to_uint()) as u32)
+    }
+}
+
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl Sub<BytePos, BytePos> for BytePos {
+    fn sub(self, rhs: BytePos) -> BytePos {
         BytePos((self.to_uint() - rhs.to_uint()) as u32)
     }
 }
@@ -69,14 +87,32 @@ impl Pos for CharPos {
     fn to_uint(&self) -> uint { let CharPos(n) = *self; n }
 }
 
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl Add<CharPos,CharPos> for CharPos {
     fn add(&self, rhs: &CharPos) -> CharPos {
         CharPos(self.to_uint() + rhs.to_uint())
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl Add<CharPos, CharPos> for CharPos {
+    fn add(self, rhs: CharPos) -> CharPos {
+        CharPos(self.to_uint() + rhs.to_uint())
+    }
+}
+
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl Sub<CharPos,CharPos> for CharPos {
     fn sub(&self, rhs: &CharPos) -> CharPos {
+        CharPos(self.to_uint() - rhs.to_uint())
+    }
+}
+
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl Sub<CharPos, CharPos> for CharPos {
+    fn sub(self, rhs: CharPos) -> CharPos {
         CharPos(self.to_uint() - rhs.to_uint())
     }
 }
@@ -293,7 +329,7 @@ impl FileMap {
         // the new charpos must be > the last one (or it's the first one).
         let mut lines = self.lines.borrow_mut();
         let line_len = lines.len();
-        assert!(line_len == 0 || ((*lines)[line_len - 1] < pos))
+        assert!(line_len == 0 || ((*lines)[line_len - 1] < pos));
         lines.push(pos);
     }
 
@@ -568,7 +604,9 @@ impl CodeMap {
         ExpnId(expansions.len().to_u32().expect("too many ExpnInfo's!") - 1)
     }
 
-    pub fn with_expn_info<T>(&self, id: ExpnId, f: |Option<&ExpnInfo>| -> T) -> T {
+    pub fn with_expn_info<T, F>(&self, id: ExpnId, f: F) -> T where
+        F: FnOnce(Option<&ExpnInfo>) -> T,
+    {
         match id {
             NO_EXPANSION => f(None),
             ExpnId(i) => f(Some(&(*self.expansions.borrow())[i as uint]))

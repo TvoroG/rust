@@ -429,12 +429,12 @@ impl<'tcx> TypeMap<'tcx> {
 
                 from_def_id_and_substs(self,
                                        cx,
-                                       trait_data.principal.def_id,
-                                       &trait_data.principal.substs,
+                                       trait_data.principal.def_id(),
+                                       trait_data.principal.substs(),
                                        &mut unique_type_id);
             },
-            ty::ty_bare_fn(ty::BareFnTy{ fn_style, abi, ref sig } ) => {
-                if fn_style == ast::UnsafeFn {
+            ty::ty_bare_fn(ty::BareFnTy{ unsafety, abi, ref sig } ) => {
+                if unsafety == ast::Unsafety::Unsafe {
                     unique_type_id.push_str("unsafe ");
                 }
 
@@ -442,7 +442,7 @@ impl<'tcx> TypeMap<'tcx> {
 
                 unique_type_id.push_str(" fn(");
 
-                for &parameter_type in sig.inputs.iter() {
+                for &parameter_type in sig.0.inputs.iter() {
                     let parameter_type_id =
                         self.get_unique_type_id_of_type(cx, parameter_type);
                     let parameter_type_id =
@@ -451,12 +451,12 @@ impl<'tcx> TypeMap<'tcx> {
                     unique_type_id.push(',');
                 }
 
-                if sig.variadic {
+                if sig.0.variadic {
                     unique_type_id.push_str("...");
                 }
 
                 unique_type_id.push_str(")->");
-                match sig.output {
+                match sig.0.output {
                     ty::FnConverging(ret_ty) => {
                         let return_type_id = self.get_unique_type_id_of_type(cx, ret_ty);
                         let return_type_id = self.get_unique_type_id_as_string(return_type_id);
@@ -551,13 +551,13 @@ impl<'tcx> TypeMap<'tcx> {
                                               cx: &CrateContext<'a, 'tcx>,
                                               closure_ty: ty::ClosureTy<'tcx>,
                                               unique_type_id: &mut String) {
-        let ty::ClosureTy { fn_style,
+        let ty::ClosureTy { unsafety,
                             onceness,
                             store,
                             ref bounds,
                             ref sig,
                             abi: _ } = closure_ty;
-        if fn_style == ast::UnsafeFn {
+        if unsafety == ast::Unsafety::Unsafe {
             unique_type_id.push_str("unsafe ");
         }
 
@@ -575,7 +575,7 @@ impl<'tcx> TypeMap<'tcx> {
             }
         };
 
-        for &parameter_type in sig.inputs.iter() {
+        for &parameter_type in sig.0.inputs.iter() {
             let parameter_type_id =
                 self.get_unique_type_id_of_type(cx, parameter_type);
             let parameter_type_id =
@@ -584,13 +584,13 @@ impl<'tcx> TypeMap<'tcx> {
             unique_type_id.push(',');
         }
 
-        if sig.variadic {
+        if sig.0.variadic {
             unique_type_id.push_str("...");
         }
 
         unique_type_id.push_str("|->");
 
-        match sig.output {
+        match sig.0.output {
             ty::FnConverging(ret_ty) => {
                 let return_type_id = self.get_unique_type_id_of_type(cx, ret_ty);
                 let return_type_id = self.get_unique_type_id_as_string(return_type_id);
@@ -634,7 +634,7 @@ impl<'tcx> TypeMap<'tcx> {
 
 // Returns from the enclosing function if the type metadata with the given
 // unique id can be found in the type map
-macro_rules! return_if_metadata_created_in_meantime(
+macro_rules! return_if_metadata_created_in_meantime {
     ($cx: expr, $unique_type_id: expr) => (
         match debug_context($cx).type_map
                                 .borrow()
@@ -643,7 +643,7 @@ macro_rules! return_if_metadata_created_in_meantime(
             None => { /* proceed normally */ }
         };
     )
-)
+}
 
 
 /// A context object for maintaining all state needed by the debuginfo module.
@@ -1239,7 +1239,6 @@ pub fn create_function_debug_context<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
         }
         ast_map::NodeExpr(ref expr) => {
             match expr.node {
-                ast::ExprProc(ref fn_decl, ref top_level_block) |
                 ast::ExprClosure(_, _, ref fn_decl, ref top_level_block) => {
                     let name = format!("fn{}", token::gensym("fn"));
                     let name = token::str_to_ident(name.as_slice());
@@ -2788,13 +2787,13 @@ fn vec_slice_metadata<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
 
 fn subroutine_type_metadata<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                                       unique_type_id: UniqueTypeId,
-                                      signature: &ty::FnSig<'tcx>,
+                                      signature: &ty::PolyFnSig<'tcx>,
                                       span: Span)
                                       -> MetadataCreationResult {
-    let mut signature_metadata: Vec<DIType> = Vec::with_capacity(signature.inputs.len() + 1);
+    let mut signature_metadata: Vec<DIType> = Vec::with_capacity(signature.0.inputs.len() + 1);
 
     // return type
-    signature_metadata.push(match signature.output {
+    signature_metadata.push(match signature.0.output {
         ty::FnConverging(ret_ty) => match ret_ty.sty {
             ty::ty_tup(ref tys) if tys.is_empty() => ptr::null_mut(),
             _ => type_metadata(cx, ret_ty, span)
@@ -2803,7 +2802,7 @@ fn subroutine_type_metadata<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
     });
 
     // regular arguments
-    for &argument_type in signature.inputs.iter() {
+    for &argument_type in signature.0.inputs.iter() {
         signature_metadata.push(type_metadata(cx, argument_type, span));
     }
 
@@ -2835,7 +2834,7 @@ fn trait_pointer_metadata<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
     // But it does not describe the trait's methods.
 
     let def_id = match trait_type.sty {
-        ty::ty_trait(box ty::TyTrait { ref principal, .. }) => principal.def_id,
+        ty::ty_trait(box ty::TyTrait { ref principal, .. }) => principal.def_id(),
         _ => {
             let pp_type_name = ppaux::ty_to_string(cx.tcx(), trait_type);
             cx.sess().bug(format!("debuginfo: Unexpected trait-object type in \
@@ -3212,13 +3211,13 @@ fn populate_scope_map(cx: &CrateContext,
     });
 
     // local helper functions for walking the AST.
-    fn with_new_scope(cx: &CrateContext,
-                      scope_span: Span,
-                      scope_stack: &mut Vec<ScopeStackEntry> ,
-                      scope_map: &mut NodeMap<DIScope>,
-                      inner_walk: |&CrateContext,
-                                   &mut Vec<ScopeStackEntry> ,
-                                   &mut NodeMap<DIScope>|) {
+    fn with_new_scope<F>(cx: &CrateContext,
+                         scope_span: Span,
+                         scope_stack: &mut Vec<ScopeStackEntry> ,
+                         scope_map: &mut NodeMap<DIScope>,
+                         inner_walk: F) where
+        F: FnOnce(&CrateContext, &mut Vec<ScopeStackEntry>, &mut NodeMap<DIScope>),
+    {
         // Create a new lexical scope and push it onto the stack
         let loc = cx.sess().codemap().lookup_char_pos(scope_span.lo);
         let file_metadata = file_metadata(cx, loc.file.name.as_slice());
@@ -3473,7 +3472,8 @@ fn populate_scope_map(cx: &CrateContext,
                 walk_expr(cx, &**sub_exp, scope_stack, scope_map),
 
             ast::ExprBox(ref place, ref sub_expr) => {
-                walk_expr(cx, &**place, scope_stack, scope_map);
+                place.as_ref().map(
+                    |e| walk_expr(cx, &**e, scope_stack, scope_map));
                 walk_expr(cx, &**sub_expr, scope_stack, scope_map);
             }
 
@@ -3588,7 +3588,6 @@ fn populate_scope_map(cx: &CrateContext,
                 })
             }
 
-            ast::ExprProc(ref decl, ref block) |
             ast::ExprClosure(_, _, ref decl, ref block) => {
                 with_new_scope(cx,
                                block.span,
@@ -3766,11 +3765,11 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
             output.push(']');
         },
         ty::ty_trait(ref trait_data) => {
-            push_item_name(cx, trait_data.principal.def_id, false, output);
-            push_type_params(cx, &trait_data.principal.substs, output);
+            push_item_name(cx, trait_data.principal.def_id(), false, output);
+            push_type_params(cx, trait_data.principal.substs(), output);
         },
-        ty::ty_bare_fn(ty::BareFnTy{ fn_style, abi, ref sig } ) => {
-            if fn_style == ast::UnsafeFn {
+        ty::ty_bare_fn(ty::BareFnTy{ unsafety, abi, ref sig } ) => {
+            if unsafety == ast::Unsafety::Unsafe {
                 output.push_str("unsafe ");
             }
 
@@ -3782,8 +3781,8 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
 
             output.push_str("fn(");
 
-            if sig.inputs.len() > 0 {
-                for &parameter_type in sig.inputs.iter() {
+            if sig.0.inputs.len() > 0 {
+                for &parameter_type in sig.0.inputs.iter() {
                     push_debuginfo_type_name(cx, parameter_type, true, output);
                     output.push_str(", ");
                 }
@@ -3791,8 +3790,8 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                 output.pop();
             }
 
-            if sig.variadic {
-                if sig.inputs.len() > 0 {
+            if sig.0.variadic {
+                if sig.0.inputs.len() > 0 {
                     output.push_str(", ...");
                 } else {
                     output.push_str("...");
@@ -3801,7 +3800,7 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
 
             output.push(')');
 
-            match sig.output {
+            match sig.0.output {
                 ty::FnConverging(result_type) if ty::type_is_nil(result_type) => {}
                 ty::FnConverging(result_type) => {
                     output.push_str(" -> ");
@@ -3812,13 +3811,13 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                 }
             }
         },
-        ty::ty_closure(box ty::ClosureTy { fn_style,
+        ty::ty_closure(box ty::ClosureTy { unsafety,
                                            onceness,
                                            store,
                                            ref sig,
                                            .. // omitting bounds ...
                                            }) => {
-            if fn_style == ast::UnsafeFn {
+            if unsafety == ast::Unsafety::Unsafe {
                 output.push_str("unsafe ");
             }
 
@@ -3842,8 +3841,8 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                 }
             };
 
-            if sig.inputs.len() > 0 {
-                for &parameter_type in sig.inputs.iter() {
+            if sig.0.inputs.len() > 0 {
+                for &parameter_type in sig.0.inputs.iter() {
                     push_debuginfo_type_name(cx, parameter_type, true, output);
                     output.push_str(", ");
                 }
@@ -3851,8 +3850,8 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
                 output.pop();
             }
 
-            if sig.variadic {
-                if sig.inputs.len() > 0 {
+            if sig.0.variadic {
+                if sig.0.inputs.len() > 0 {
                     output.push_str(", ...");
                 } else {
                     output.push_str("...");
@@ -3861,7 +3860,7 @@ fn push_debuginfo_type_name<'a, 'tcx>(cx: &CrateContext<'a, 'tcx>,
 
             output.push(param_list_closing_char);
 
-            match sig.output {
+            match sig.0.output {
                 ty::FnConverging(result_type) if ty::type_is_nil(result_type) => {}
                 ty::FnConverging(result_type) => {
                     output.push_str(" -> ");

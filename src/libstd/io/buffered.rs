@@ -19,7 +19,7 @@ use ops::Drop;
 use option::Option;
 use option::Option::{Some, None};
 use result::Result::{Ok, Err};
-use slice::{SlicePrelude};
+use slice::{SliceExt};
 use slice;
 use vec::Vec;
 
@@ -80,7 +80,7 @@ impl<R: Reader> BufferedReader<R> {
 
     /// Gets a mutable reference to the underlying reader.
     ///
-    /// ## Warning
+    /// # Warning
     ///
     /// It is inadvisable to directly read from the underlying reader.
     pub fn get_mut(&mut self) -> &mut R { &mut self.inner }
@@ -185,7 +185,7 @@ impl<W: Writer> BufferedWriter<W> {
 
     /// Gets a mutable reference to the underlying write.
     ///
-    /// ## Warning
+    /// # Warning
     ///
     /// It is inadvisable to directly read from the underlying writer.
     pub fn get_mut(&mut self) -> &mut W { self.inner.as_mut().unwrap() }
@@ -357,7 +357,7 @@ impl<S: Stream> BufferedStream<S> {
 
     /// Gets a mutable reference to the underlying stream.
     ///
-    /// ## Warning
+    /// # Warning
     ///
     /// It is inadvisable to read directly from or write directly to the
     /// underlying stream.

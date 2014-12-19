@@ -19,10 +19,10 @@ use kinds::{Copy, Sized};
 use mem;
 use option::Option;
 use option::Option::{Some, None};
-use ops::Deref;
+use ops::{Deref, FnOnce};
 use result::Result::{Ok, Err};
 use result;
-use slice::SlicePrelude;
+use slice::SliceExt;
 use slice;
 use str::StrPrelude;
 
@@ -115,7 +115,7 @@ impl<'a> Argument<'a> {
         Show::fmt(x, f)
     }
 
-    fn new<'a, T>(x: &'a T, f: fn(&T, &mut Formatter) -> Result) -> Argument<'a> {
+    fn new<'b, T>(x: &'b T, f: fn(&T, &mut Formatter) -> Result) -> Argument<'b> {
         unsafe {
             Argument {
                 formatter: mem::transmute(f),
@@ -124,7 +124,7 @@ impl<'a> Argument<'a> {
         }
     }
 
-    fn from_uint<'a>(x: &'a uint) -> Argument<'a> {
+    fn from_uint(x: &uint) -> Argument {
         Argument::new(x, Argument::show_uint)
     }
 
@@ -144,8 +144,8 @@ impl<'a> Arguments<'a> {
     /// Arguments structure.
     #[doc(hidden)] #[inline]
     #[experimental = "implementation detail of the `format_args!` macro"]
-    pub fn new<'a>(pieces: &'a [&'a str],
-                   args: &'a [Argument<'a>]) -> Arguments<'a> {
+    pub fn new(pieces: &'a [&'a str],
+               args: &'a [Argument<'a>]) -> Arguments<'a> {
         Arguments {
             pieces: pieces,
             fmt: None,
@@ -161,9 +161,9 @@ impl<'a> Arguments<'a> {
     /// unsafety, but will ignore invalid .
     #[doc(hidden)] #[inline]
     #[experimental = "implementation detail of the `format_args!` macro"]
-    pub fn with_placeholders<'a>(pieces: &'a [&'a str],
-                                 fmt: &'a [rt::Argument<'a>],
-                                 args: &'a [Argument<'a>]) -> Arguments<'a> {
+    pub fn with_placeholders(pieces: &'a [&'a str],
+                             fmt: &'a [rt::Argument<'a>],
+                             args: &'a [Argument<'a>]) -> Arguments<'a> {
         Arguments {
             pieces: pieces,
             fmt: Some(fmt),
@@ -491,10 +491,9 @@ impl<'a> Formatter<'a> {
 
     /// Runs a callback, emitting the correct padding either before or
     /// afterwards depending on whether right or left alignment is requested.
-    fn with_padding(&mut self,
-                    padding: uint,
-                    default: rt::Alignment,
-                    f: |&mut Formatter| -> Result) -> Result {
+    fn with_padding<F>(&mut self, padding: uint, default: rt::Alignment, f: F) -> Result where
+        F: FnOnce(&mut Formatter) -> Result,
+    {
         use char::Char;
         let align = match self.align {
             rt::AlignUnknown => default,
@@ -640,7 +639,7 @@ impl<'a, T> Pointer for &'a mut T {
     }
 }
 
-macro_rules! floating(($ty:ident) => {
+macro_rules! floating { ($ty:ident) => {
     impl Show for $ty {
         fn fmt(&self, fmt: &mut Formatter) -> Result {
             use num::Float;
@@ -703,9 +702,9 @@ macro_rules! floating(($ty:ident) => {
             })
         }
     }
-})
-floating!(f32)
-floating!(f64)
+} }
+floating! { f32 }
+floating! { f64 }
 
 // Implementation of Show for various core types
 
@@ -717,9 +716,11 @@ impl<T> Show for *mut T {
     fn fmt(&self, f: &mut Formatter) -> Result { Pointer::fmt(self, f) }
 }
 
-macro_rules! peel(($name:ident, $($other:ident,)*) => (tuple!($($other,)*)))
+macro_rules! peel {
+    ($name:ident, $($other:ident,)*) => (tuple! { $($other,)* })
+}
 
-macro_rules! tuple (
+macro_rules! tuple {
     () => ();
     ( $($name:ident,)+ ) => (
         impl<$($name:Show),*> Show for ($($name,)*) {
@@ -741,9 +742,9 @@ macro_rules! tuple (
                 write!(f, ")")
             }
         }
-        peel!($($name,)*)
+        peel! { $($name,)* }
     )
-)
+}
 
 tuple! { T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, }
 

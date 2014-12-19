@@ -676,7 +676,7 @@ fn extract_vec_elems<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
 // pattern.  Note that, because the macro is well-typed, either ALL of the
 // matches should fit that sort of pattern or NONE (however, some of the
 // matches may be wildcards like _ or identifiers).
-macro_rules! any_pat (
+macro_rules! any_pat {
     ($m:expr, $col:expr, $pattern:pat) => (
         ($m).iter().any(|br| {
             match br.pats[$col].node {
@@ -685,7 +685,7 @@ macro_rules! any_pat (
             }
         })
     )
-)
+}
 
 fn any_uniq_pat(m: &[Match], col: uint) -> bool {
     any_pat!(m, col, ast::PatBox(_))
@@ -771,7 +771,7 @@ fn pick_column_to_specialize(def_map: &DefMap, m: &[Match]) -> Option<uint> {
         }
     };
 
-    let column_contains_any_nonwild_patterns: |&uint| -> bool = |&col| {
+    let column_contains_any_nonwild_patterns = |&: &col: &uint| -> bool {
         m.iter().any(|row| match row.pats[col].node {
             ast::PatWild(_) => false,
             _ => true
@@ -1578,14 +1578,15 @@ pub fn store_for_loop_binding<'blk, 'tcx>(bcx: Block<'blk, 'tcx>,
     bind_irrefutable_pat(bcx, pat, llvalue, body_scope)
 }
 
-fn mk_binding_alloca<'blk, 'tcx, A>(bcx: Block<'blk, 'tcx>,
-                                    p_id: ast::NodeId,
-                                    ident: &ast::Ident,
-                                    cleanup_scope: cleanup::ScopeId,
-                                    arg: A,
-                                    populate: |A, Block<'blk, 'tcx>, ValueRef, Ty<'tcx>|
-                                              -> Block<'blk, 'tcx>)
-                                    -> Block<'blk, 'tcx> {
+fn mk_binding_alloca<'blk, 'tcx, A, F>(bcx: Block<'blk, 'tcx>,
+                                       p_id: ast::NodeId,
+                                       ident: &ast::Ident,
+                                       cleanup_scope: cleanup::ScopeId,
+                                       arg: A,
+                                       populate: F)
+                                       -> Block<'blk, 'tcx> where
+    F: FnOnce(A, Block<'blk, 'tcx>, ValueRef, Ty<'tcx>) -> Block<'blk, 'tcx>,
+{
     let var_ty = node_id_type(bcx, p_id);
 
     // Allocate memory on stack for the binding.

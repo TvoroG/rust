@@ -183,26 +183,62 @@ impl<E:CLike> EnumSet<E> {
     }
 }
 
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl<E:CLike> Sub<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
     fn sub(&self, e: &EnumSet<E>) -> EnumSet<E> {
         EnumSet {bits: self.bits & !e.bits}
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl<E:CLike> Sub<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
+    fn sub(self, e: EnumSet<E>) -> EnumSet<E> {
+        EnumSet {bits: self.bits & !e.bits}
+    }
+}
+
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl<E:CLike> BitOr<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
     fn bitor(&self, e: &EnumSet<E>) -> EnumSet<E> {
         EnumSet {bits: self.bits | e.bits}
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl<E:CLike> BitOr<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
+    fn bitor(self, e: EnumSet<E>) -> EnumSet<E> {
+        EnumSet {bits: self.bits | e.bits}
+    }
+}
+
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl<E:CLike> BitAnd<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
     fn bitand(&self, e: &EnumSet<E>) -> EnumSet<E> {
         EnumSet {bits: self.bits & e.bits}
     }
 }
 
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl<E:CLike> BitAnd<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
+    fn bitand(self, e: EnumSet<E>) -> EnumSet<E> {
+        EnumSet {bits: self.bits & e.bits}
+    }
+}
+
+// NOTE(stage0): Remove impl after a snapshot
+#[cfg(stage0)]
 impl<E:CLike> BitXor<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
     fn bitxor(&self, e: &EnumSet<E>) -> EnumSet<E> {
+        EnumSet {bits: self.bits ^ e.bits}
+    }
+}
+
+#[cfg(not(stage0))]  // NOTE(stage0): Remove cfg after a snapshot
+impl<E:CLike> BitXor<EnumSet<E>, EnumSet<E>> for EnumSet<E> {
+    fn bitxor(self, e: EnumSet<E>) -> EnumSet<E> {
         EnumSet {bits: self.bits ^ e.bits}
     }
 }
@@ -375,7 +411,7 @@ mod test {
 
         assert!(e1.is_subset(&e2));
         assert!(e2.is_superset(&e1));
-        assert!(!e3.is_superset(&e2))
+        assert!(!e3.is_superset(&e2));
         assert!(!e2.is_superset(&e3))
     }
 
@@ -402,23 +438,23 @@ mod test {
         let mut e1: EnumSet<Foo> = EnumSet::new();
 
         let elems: ::vec::Vec<Foo> = e1.iter().collect();
-        assert!(elems.is_empty())
+        assert!(elems.is_empty());
 
         e1.insert(A);
         let elems: ::vec::Vec<_> = e1.iter().collect();
-        assert_eq!(vec![A], elems)
+        assert_eq!(vec![A], elems);
 
         e1.insert(C);
         let elems: ::vec::Vec<_> = e1.iter().collect();
-        assert_eq!(vec![A,C], elems)
+        assert_eq!(vec![A,C], elems);
 
         e1.insert(C);
         let elems: ::vec::Vec<_> = e1.iter().collect();
-        assert_eq!(vec![A,C], elems)
+        assert_eq!(vec![A,C], elems);
 
         e1.insert(B);
         let elems: ::vec::Vec<_> = e1.iter().collect();
-        assert_eq!(vec![A,B,C], elems)
+        assert_eq!(vec![A,B,C], elems);
     }
 
     ///////////////////////////////////////////////////////////////////////////
@@ -436,35 +472,35 @@ mod test {
 
         let e_union = e1 | e2;
         let elems: ::vec::Vec<_> = e_union.iter().collect();
-        assert_eq!(vec![A,B,C], elems)
+        assert_eq!(vec![A,B,C], elems);
 
         let e_intersection = e1 & e2;
         let elems: ::vec::Vec<_> = e_intersection.iter().collect();
-        assert_eq!(vec![C], elems)
+        assert_eq!(vec![C], elems);
 
         // Another way to express intersection
         let e_intersection = e1 - (e1 - e2);
         let elems: ::vec::Vec<_> = e_intersection.iter().collect();
-        assert_eq!(vec![C], elems)
+        assert_eq!(vec![C], elems);
 
         let e_subtract = e1 - e2;
         let elems: ::vec::Vec<_> = e_subtract.iter().collect();
-        assert_eq!(vec![A], elems)
+        assert_eq!(vec![A], elems);
 
         // Bitwise XOR of two sets, aka symmetric difference
         let e_symmetric_diff = e1 ^ e2;
         let elems: ::vec::Vec<_> = e_symmetric_diff.iter().collect();
-        assert_eq!(vec![A,B], elems)
+        assert_eq!(vec![A,B], elems);
 
         // Another way to express symmetric difference
         let e_symmetric_diff = (e1 - e2) | (e2 - e1);
         let elems: ::vec::Vec<_> = e_symmetric_diff.iter().collect();
-        assert_eq!(vec![A,B], elems)
+        assert_eq!(vec![A,B], elems);
 
         // Yet another way to express symmetric difference
         let e_symmetric_diff = (e1 | e2) - (e1 & e2);
         let elems: ::vec::Vec<_> = e_symmetric_diff.iter().collect();
-        assert_eq!(vec![A,B], elems)
+        assert_eq!(vec![A,B], elems);
     }
 
     #[test]
